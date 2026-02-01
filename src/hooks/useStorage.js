@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { storage } from '../lib/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 export function useStorage() {
@@ -14,34 +13,49 @@ export function useStorage() {
 
     setIsUploading(true);
     setError(null);
-    setProgress(0);
+    setProgress(10); // Start progress
 
-    return new Promise((resolve, reject) => {
-      // Create storage ref: e.g., projects/uid/filename
-      const storageRef = ref(storage, path);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+    try {
+      // Supabase mein path clean hona chahiye (no double slashes)
+      // Example Path: users/123/avatar.jpg
+      const cleanPath = path.replace(/^\/+/, '');
 
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const percentage = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setProgress(percentage);
-        },
-        (err) => {
-          setError(err);
-          setIsUploading(false);
-          toast.error('Upload failed');
-          reject(err);
-        },
-        async () => {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          setUrl(downloadUrl);
-          setIsUploading(false);
-          setProgress(100);
-          resolve(downloadUrl);
-        }
-      );
-    });
+      // 1. Upload File
+      const { data, error: uploadError } = await supabase
+        .storage
+        .from('uploads') // Bucket Name: 'uploads'
+        .upload(cleanPath, file, {
+          cacheControl: '3600',
+          upsert: true // Overwrite if exists
+        });
+
+      if (uploadError) throw uploadError;
+
+      setProgress(80);
+
+      // 2. Get Public URL
+      const { data: urlData } = supabase
+        .storage
+        .from('uploads')
+        .getPublicUrl(cleanPath);
+
+      if (!urlData.publicUrl) throw new Error("Failed to get public URL");
+
+      const finalUrl = urlData.publicUrl;
+      
+      setUrl(finalUrl);
+      setProgress(100);
+      setIsUploading(false);
+      
+      return finalUrl;
+
+    } catch (err) {
+      console.error("Supabase Upload Error:", err);
+      setError(err);
+      setIsUploading(false);
+      toast.error('Upload failed: ' + err.message);
+      return null;
+    }
   };
 
   return { progress, error, url, isUploading, uploadFile };
