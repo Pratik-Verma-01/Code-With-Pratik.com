@@ -13,48 +13,57 @@ export function useStorage() {
 
     setIsUploading(true);
     setError(null);
-    setProgress(10); // Start progress
+    setProgress(10);
 
     try {
-      // Supabase mein path clean hona chahiye (no double slashes)
-      // Example Path: users/123/avatar.jpg
-      const cleanPath = path.replace(/^\/+/, '');
+      // 1. Sanitize Filename (Spaces aur Special chars hatao)
+      // Path example: projects/123/my-slug/thumb/
+      // File example: "My Photo (1).jpg" -> "my-photo-1.jpg"
+      
+      const fileExt = file.name.split('.').pop();
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const cleanFileName = `${Date.now()}-${randomId}.${fileExt}`;
+      
+      // Full Path: projects/123/slug/thumb/1709999-abc.jpg
+      // Note: Hum path ke end mein filename jod rahe hain
+      const fullPath = `${path}/${cleanFileName}`.replace(/\/+/g, '/'); // Remove double slashes
 
-      // 1. Upload File
+      // 2. Upload to Supabase
       const { data, error: uploadError } = await supabase
         .storage
-        .from('uploads') // Bucket Name: 'uploads'
-        .upload(cleanPath, file, {
+        .from('uploads')
+        .upload(fullPath, file, {
           cacheControl: '3600',
-          upsert: true // Overwrite if exists
+          upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Supabase Error Log:", uploadError);
+        throw new Error(uploadError.message);
+      }
 
-      setProgress(80);
+      setProgress(90);
 
-      // 2. Get Public URL
+      // 3. Get Public URL
       const { data: urlData } = supabase
         .storage
         .from('uploads')
-        .getPublicUrl(cleanPath);
+        .getPublicUrl(fullPath);
 
-      if (!urlData.publicUrl) throw new Error("Failed to get public URL");
-
-      const finalUrl = urlData.publicUrl;
+      const publicUrl = urlData.publicUrl;
       
-      setUrl(finalUrl);
+      setUrl(publicUrl);
       setProgress(100);
       setIsUploading(false);
       
-      return finalUrl;
+      return publicUrl;
 
     } catch (err) {
-      console.error("Supabase Upload Error:", err);
-      setError(err);
+      console.error("Upload Catch:", err);
+      setError(err.message);
       setIsUploading(false);
-      toast.error('Upload failed: ' + err.message);
-      return null;
+      // Alert user directly
+      throw new Error(err.message || "Upload Failed");
     }
   };
 
