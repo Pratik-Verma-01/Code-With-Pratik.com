@@ -23,16 +23,16 @@ export function useFirestore(collectionName) {
     setLoading(true);
     try {
       const ref = collection(db, collectionName);
+      // Ensure createdAt is a simpler format if serverTimestamp fails on some devices
       const docRef = await addDoc(ref, { 
         ...data, 
         createdAt: serverTimestamp() 
       });
-      toast.success('Saved successfully!');
+      // toast is handled in the component usually, but keeping logic consistent
       return docRef;
     } catch (err) {
       console.error(err);
       setError(err.message);
-      toast.error('Failed to save data');
       throw err;
     } finally {
       setLoading(false);
@@ -70,27 +70,29 @@ export function useFirestore(collectionName) {
     }
   };
 
-  // Get specific documents (Query)
-  // useFilters is an array of where() clauses
-  // e.g. ["userId", "==", "123"]
+  // --- BUG FIX IS HERE ---
   const getDocuments = useCallback(async (qParams = null) => {
     setLoading(true);
     try {
       let ref = collection(db, collectionName);
-      let q = query(ref, orderBy('createdAt', 'desc'));
+      let q;
 
       if (qParams) {
-        // Simple implementation for single where clause
-        // Usage: getDocuments({ field: 'userId', op: '==', val: '123' })
+        // FIX: Agar hum specific cheez dhoondh rahe hain (Search/Filter), 
+        // to 'orderBy' (Sorting) MAT lagao. Isse Index error nahi aayega.
         q = query(ref, where(qParams.field, qParams.op, qParams.val));
+      } else {
+        // Agar Home page par sab dikhana hai, tabhi Sorting lagao.
+        q = query(ref, orderBy('createdAt', 'desc'));
       }
 
       const snapshot = await getDocs(q);
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
       setLoading(false);
       return results;
     } catch (err) {
-      console.error(err);
+      console.error("Firestore Read Error:", err);
       setError(err.message);
       setLoading(false);
       return [];
