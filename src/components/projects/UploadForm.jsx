@@ -26,44 +26,73 @@ export default function UploadForm() {
   });
 
   const onSubmit = async (data) => {
-    if (!thumbnail) return toast.error('Thumbnail is required');
+    // 1. Validation Check
+    if (!thumbnail) {
+      alert("Error: Thumbnail image select karna zaroori hai!");
+      return;
+    }
     
     try {
+      toast.loading("Uploading...", { id: "upload" });
+
       const slug = generateSlug(data.title) + '-' + Date.now().toString().slice(-4);
       
-      // Upload Files
-      const thumbUrl = await uploadFile(thumbnail, `projects/${userProfile.uid}/${slug}/thumb`);
-      let zipUrl = '';
-      if (zipFile) {
-        zipUrl = await uploadFile(zipFile, `projects/${userProfile.uid}/${slug}/archive.zip`);
+      // 2. Image Upload Logic
+      let thumbUrl = null;
+      try {
+        thumbUrl = await uploadFile(thumbnail, `projects/${userProfile.uid}/${slug}/thumb`);
+        if (!thumbUrl) throw new Error("Image upload returned empty URL");
+      } catch (storageErr) {
+        alert("Storage Error (Image): " + storageErr.message);
+        toast.dismiss("upload");
+        return; // Stop here
       }
 
+      // 3. Zip Upload Logic (Optional)
+      let zipUrl = '';
+      if (zipFile) {
+        try {
+          zipUrl = await uploadFile(zipFile, `projects/${userProfile.uid}/${slug}/archive.zip`);
+        } catch (storageErr) {
+          alert("Storage Error (ZIP): " + storageErr.message);
+          // Zip fail hone par hum rukte nahi hain, aage badhte hain
+        }
+      }
+
+      // 4. Firestore Save Logic
       const projectData = {
         ...data,
         slug,
         thumbnail_url: thumbUrl,
         code_archive_url: zipUrl,
-        created_by_user_id: userProfile.uid,
-        author_name: userProfile.fullName,
-        author_photo: userProfile.photoURL,
+        created_by_user_id: userProfile.uid, // Ownership check
+        author_name: userProfile.fullName || 'Unknown',
+        author_photo: userProfile.photoURL || '',
         likes: 0,
-        views: 0
+        views: 0,
+        createdAt: new Date() // Server timestamp ki jagah Date use karein mobile fix ke liye
       };
 
-      await addDocument(projectData);
-      toast.success('Project uploaded successfully!');
-      navigate(`/project/${slug}`);
+      try {
+        await addDocument(projectData);
+        toast.success('Project Created!', { id: "upload" });
+        navigate(`/project/${slug}`);
+      } catch (dbErr) {
+        alert("Database Error (Firestore): " + dbErr.message + "\nCheck Rules!");
+        toast.dismiss("upload");
+      }
 
     } catch (error) {
       console.error(error);
-      toast.error('Upload failed. Check console.');
+      alert("Unknown Error: " + error.message);
+      toast.dismiss("upload");
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* --- FORM UI SAME AS BEFORE --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Column */}
         <div className="space-y-4">
           <Input 
             label="Project Title" 
@@ -102,7 +131,6 @@ export default function UploadForm() {
           />
         </div>
 
-        {/* Right Column */}
         <div className="space-y-4">
           <Input 
             label="Git Repo URL (Optional)" 
@@ -112,59 +140,51 @@ export default function UploadForm() {
           />
 
           <div className="space-y-2">
-             <label className="text-sm font-medium text-gray-400">Thumbnail</label>
-             <div className="relative border-2 border-dashed border-white/10 rounded-xl p-4 hover:bg-white/5 transition text-center cursor-pointer">
+             <label className="text-sm font-medium text-gray-400">Thumbnail (Required)</label>
+             <div className="relative border-2 border-dashed border-white/10 rounded-xl p-4 text-center">
                <input 
                   type="file" 
                   accept="image/*" 
-                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  className="absolute inset-0 opacity-0 w-full h-full z-10" // Mobile touch fix
                   onChange={(e) => setThumbnail(e.target.files[0])}
                />
-               {thumbnail ? (
-                 <div className="flex items-center justify-center gap-2 text-primary">
-                    <span>{thumbnail.name}</span>
-                    <button onClick={(e) => {e.preventDefault(); setThumbnail(null);}}><X className="w-4 h-4" /></button>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center text-gray-400">
-                   <UploadCloud className="w-8 h-8 mb-2" />
-                   <span>Click to upload image</span>
-                 </div>
-               )}
+               <div className="py-4">
+                 {thumbnail ? (
+                   <span className="text-primary font-bold">{thumbnail.name}</span>
+                 ) : (
+                   <span className="text-gray-400">Tap to upload Image</span>
+                 )}
+               </div>
              </div>
           </div>
 
           <div className="space-y-2">
              <label className="text-sm font-medium text-gray-400">Project ZIP (Optional)</label>
-             <div className="relative border-2 border-dashed border-white/10 rounded-xl p-4 hover:bg-white/5 transition text-center cursor-pointer">
+             <div className="relative border-2 border-dashed border-white/10 rounded-xl p-4 text-center">
                <input 
                   type="file" 
                   accept=".zip,.rar" 
-                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  className="absolute inset-0 opacity-0 w-full h-full z-10" // Mobile touch fix
                   onChange={(e) => setZipFile(e.target.files[0])}
                />
-               {zipFile ? (
-                 <div className="flex items-center justify-center gap-2 text-secondary">
-                    <span>{zipFile.name}</span>
-                    <button onClick={(e) => {e.preventDefault(); setZipFile(null);}}><X className="w-4 h-4" /></button>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center text-gray-400">
-                   <UploadCloud className="w-8 h-8 mb-2" />
-                   <span>Click to upload ZIP</span>
-                 </div>
-               )}
+               <div className="py-4">
+                 {zipFile ? (
+                   <span className="text-secondary font-bold">{zipFile.name}</span>
+                 ) : (
+                   <span className="text-gray-400">Tap to upload ZIP</span>
+                 )}
+               </div>
              </div>
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-400">Long Description (Markdown)</label>
+        <label className="text-sm font-medium text-gray-400">Long Description</label>
         <textarea
           {...register('long_description')}
           rows={8}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 focus:outline-none focus:border-primary/50 resize-y"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
           placeholder="# Project Details..."
         />
         {errors.long_description && <p className="text-xs text-red-400">{errors.long_description.message}</p>}
