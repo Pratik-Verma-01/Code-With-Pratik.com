@@ -1,7 +1,16 @@
-import { allowCors, handleError } from './_utils.js';
-import { aiChatSchema } from '../src/lib/validators.js';
+import { allowCors } from './_utils.js';
+import { z } from 'zod'; // Direct Zod import (No src file dependency)
 
-// SYSTEM PERSONAS
+// --- SCHEMA DEFINITION (LOCALLY) ---
+// Hum yahi define kar rahe hain taaki import error na aaye
+const aiChatSchema = z.object({
+  message: z.string().min(1, "Message cannot be empty").max(4000),
+  ai_name: z.string(),
+  project_context: z.string().optional(),
+  history: z.array(z.any()).optional().default([]),
+});
+
+// --- SYSTEM PERSONAS ---
 const PERSONAS = {
   Nova: "You are Nova, an enthusiastic and general-purpose coding assistant. You love helping beginners and experts alike. Keep answers concise but friendly.",
   Astra: "You are Astra, a specialized debugging assistant. You focus strictly on finding errors, logical flaws, and security vulnerabilities in code provided. Be precise and technical.",
@@ -17,34 +26,43 @@ async function handler(req, res) {
   }
 
   try {
-    // 1. Validate Input
-    const body = aiChatSchema.parse(req.body);
-    const { message, ai_name, project_context, history } = body;
-
-    // 2. Check Secrets
+    // 1. Secrets Check
     const API_KEY = process.env.OPENROUTER_API_KEY;
-    const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
+    const SITE_URL = process.env.SITE_URL || 'https://code-with-pratik.vercel.app';
     const SITE_NAME = process.env.SITE_NAME || 'CodeWithPratik';
 
     if (!API_KEY) {
-      console.error('Missing OPENROUTER_API_KEY');
-      return res.status(500).json({ error: 'Server misconfiguration' });
+      console.error("CRITICAL: OPENROUTER_API_KEY is missing in Vercel Envs");
+      // Specific error message bhejo taaki user ko pata chale
+      return res.status(500).json({ error: "Server Config Error: Missing API Key" });
     }
 
+    // 2. Validate Input
+    const body = aiChatSchema.parse(req.body);
+    const { message, ai_name, project_context, history } = body;
+
     // 3. Construct Messages
+    const personaPrompt = PERSONAS[ai_name] || PERSONAS['Nova'];
+    
     const systemMessage = {
       role: 'system',
-      content: `${PERSONAS[ai_name]} 
+      content: `${personaPrompt} 
       
-      CONTEXT:
-      ${project_context ? `The user is working on this project:\n${project_context}` : 'No specific project context.'}
+      CONTEXT OF PROJECT:
+      ${project_context ? project_context.slice(0, 3000) : 'No specific project context.'}
       
       You are powered by Claude 3.5 Sonnet. Format responses in Markdown. Use code blocks for code.`
     };
 
-    // Filter history to keep it lightweight (last 10 messages max)
-    const recentHistory = history.slice(-10);
-    const messages = [systemMessage, ...recentHistory, { role: 'user', content: message }];
+    // Filter history (Last 6 messages only to save tokens)
+    const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
+    
+    // Final Message Payload
+    const messages = [
+      systemMessage, 
+      ...recentHistory, 
+      { role: 'user', content: message }
+    ];
 
     // 4. Call OpenRouter
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -58,20 +76,19 @@ async function handler(req, res) {
       body: JSON.stringify({
         model: 'anthropic/claude-3.5-sonnet',
         messages: messages,
-        stream: true, // Enable streaming
+        stream: true, // Streaming ON
         temperature: 0.7,
         max_tokens: 4096
       })
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      console.error('OpenRouter API Error:', err);
-      throw new Error(`Upstream API Error: ${response.status}`);
+      const errText = await response.text();
+      console.error('OpenRouter API Error:', errText);
+      throw new Error(`OpenRouter Error (${response.status}): ${errText}`);
     }
 
-    // 5. Handle Streaming Response
-    // Vercel Serverless (Node.js) stream handling
+    // 5. Stream Response Back
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -86,14 +103,24 @@ async function handler(req, res) {
       if (done) break;
       
       const chunk = decoder.decode(value);
-      // Pass the raw chunk to the client (client will parse SSE)
       res.write(chunk);
     }
 
     res.end();
 
   } catch (error) {
-    handleError(res, error);
+    console.error('[SERVER ERROR]:', error);
+    
+    // Zod Validation Error
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Invalid Input', details: error.errors });
+    }
+
+    // Generic Error with Message
+    return res.status(500).json({ 
+      error: 'Internal Server Error', 
+      message: error.message || "Unknown server error" 
+    });
   }
 }
 
