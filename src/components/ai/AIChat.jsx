@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, Sparkles } from 'lucide-react';
 import { AI_PERSONAS } from './AIHelpers';
 import ChatMessage from './ChatMessage';
 import Button from '../ui/Button';
@@ -29,8 +29,14 @@ export default function AIChat({ projectContext }) {
     try {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Thinking...' }]);
 
-      // API Call
-      const response = await fetch('/api/openrouter', {
+      // --- FIX IS HERE: USE FULL URL ---
+      // Hum browser se pooch rahe hain ki website ka main address kya hai
+      const baseUrl = window.location.origin; // e.g., https://thpratik1.vercel.app
+      const apiUrl = `${baseUrl}/api/openrouter`;
+
+      console.log("Calling API at:", apiUrl); // Debugging ke liye
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -41,21 +47,15 @@ export default function AIChat({ projectContext }) {
         }),
       });
 
-      // ERROR HANDLING (Detailed)
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error("API Route Not Found (404). Check vercel.json or file structure.");
+          throw new Error(`API Not Found at: ${apiUrl}`);
         }
-        if (response.status === 500) {
-          const errText = await response.text();
-          throw new Error("Server Error (500): " + errText);
-        }
-        throw new Error(`API Error: ${response.status}`);
+        const errText = await response.text();
+        throw new Error(`Server Error (${response.status}): ${errText}`);
       }
 
-      if (!response.body) throw new Error('ReadableStream not supported');
-
-      // Remove "Thinking..." and start streaming
+      // Remove "Thinking..."
       setMessages(prev => {
         const newArr = [...prev];
         newArr[newArr.length - 1] = { role: 'assistant', content: '' };
@@ -69,7 +69,7 @@ export default function AIChat({ projectContext }) {
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
-        const chunkValue = decoder.decode(value);
+        const chunk = decoder.decode(value);
         
         setMessages(prev => {
           const lastMsg = prev[prev.length - 1];
@@ -79,13 +79,9 @@ export default function AIChat({ projectContext }) {
       }
 
     } catch (error) {
-      console.error("AI CHAT ERROR:", error);
-      
-      // Remove loading message
-      setMessages(prev => prev.slice(0, -1));
-      
-      // Alert user with specific error
-      alert("AI Error: " + error.message);
+      console.error("AI Error:", error);
+      setMessages(prev => prev.slice(0, -1)); // Remove loading bubble
+      alert(`AI Failed: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -98,6 +94,58 @@ export default function AIChat({ projectContext }) {
       <div className="flex overflow-x-auto p-4 gap-3 bg-black/20 border-b border-white/5 scrollbar-thin">
         {AI_PERSONAS.map((ai) => (
           <button
+            key={ai.id}
+            onClick={() => setSelectedAI(ai)}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all border",
+              selectedAI.id === ai.id 
+                ? `${ai.bg} ${ai.color} ${ai.border}`
+                : "bg-white/5 border-transparent text-gray-400 hover:bg-white/10"
+            )}
+          >
+            <ai.icon className="w-4 h-4" />
+            {ai.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 opacity-60">
+            <selectedAI.icon className={cn("w-16 h-16 mb-4", selectedAI.color)} />
+            <p className="text-lg font-medium">Chat with {selectedAI.name}</p>
+            <p className="text-sm max-w-xs">{selectedAI.description}</p>
+          </div>
+        ) : (
+          messages.map((msg, idx) => (
+            <ChatMessage key={idx} message={msg} aiConfig={selectedAI} />
+          ))
+        )}
+        <div ref={scrollRef} />
+      </div>
+
+      {/* Input Area */}
+      <form onSubmit={handleSend} className="p-4 bg-black/20 border-t border-white/5 flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={`Ask ${selectedAI.name}...`}
+          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary/50 text-white"
+          disabled={isLoading}
+        />
+        <Button 
+          type="submit" 
+          disabled={isLoading || !input.trim()}
+          className="w-12 px-0 rounded-xl"
+        >
+          {isLoading ? <Sparkles className="w-5 h-5 animate-pulse" /> : <Send className="w-5 h-5" />}
+        </Button>
+      </form>
+    </div>
+  );
+}          <button
             key={ai.id}
             onClick={() => setSelectedAI(ai)}
             className={cn(
