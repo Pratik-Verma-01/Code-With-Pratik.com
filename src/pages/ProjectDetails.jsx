@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useFirestore } from '../hooks/useFirestore';
+import { useFirestore } from '../hooks/useFirestore'; // Database
 import SEO from '../components/seo/SEO';
-import FloatingAI from '../components/ai/FloatingAI'; 
+import FloatingAI from '../components/ai/FloatingAI'; // AI Assistant
 import Button from '../components/ui/Button';
-import { Download, Github, Calendar, Eye, AlertTriangle, Code2 } from 'lucide-react';
+import { Download, Github, Calendar, Code2 } from 'lucide-react'; // Icons
 import { formatDate } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 
-// Skeleton
+// Loading Skeleton
 function ProjectSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse p-4">
@@ -24,7 +24,7 @@ function ProjectSkeleton() {
 export default function ProjectDetails() {
   const { slug } = useParams();
   
-  // Database Hook (Sirf Project lana hai, Unlock check nahi karna)
+  // Sirf Project lana hai (No Unlocks check)
   const { getDocuments: getProjects } = useFirestore('projects');
   
   const [project, setProject] = useState(null);
@@ -37,6 +37,7 @@ export default function ProjectDetails() {
     async function loadData() {
       try {
         setLoading(true);
+        // Database se project dhoondho
         const projectDocs = await getProjects({ field: 'slug', op: '==', val: slug });
         
         if (!isMounted) return;
@@ -76,7 +77,7 @@ export default function ProjectDetails() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in pb-24">
         
-        {/* Left Column: Project Info */}
+        {/* Left Column: Details */}
         <div className="lg:col-span-2 space-y-8">
           <div className="glass-panel rounded-2xl p-6 relative">
              <h1 className="text-3xl font-bold mb-4">{project.title}</h1>
@@ -99,6 +100,55 @@ export default function ProjectDetails() {
             <ReactMarkdown>{project.long_description}</ReactMarkdown>
           </div>
         </div>
+
+        {/* Right Column: DIRECT DOWNLOAD (No Gate) */}
+        <div className="space-y-6">
+          <div className="glass-panel rounded-2xl p-6 sticky top-24 border border-primary/20 shadow-[0_0_30px_rgba(0,243,255,0.05)]">
+            
+            <div className="mb-6 pb-6 border-b border-white/10">
+              <h3 className="font-bold text-xl mb-2 flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-primary" /> Source Code
+              </h3>
+              <p className="text-sm text-gray-400">
+                Free access to all project files.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* DOWNLOAD BUTTON */}
+              {project.code_archive_url ? (
+                <a href={project.code_archive_url} target="_blank" className="block">
+                  <Button className="w-full bg-white text-black hover:bg-gray-200 border-none shadow-lg shadow-white/10 py-3">
+                    <Download className="w-5 h-5 mr-2" /> Download Zip
+                  </Button>
+                </a>
+              ) : (
+                <Button disabled variant="ghost" className="w-full text-gray-500 border-dashed border-gray-600">
+                  No Zip File
+                </Button>
+              )}
+              
+              {/* GITHUB BUTTON */}
+              {project.repo_url ? (
+                <a href={project.repo_url} target="_blank" className="block">
+                  <Button variant="outline" className="w-full py-3">
+                    <Github className="w-5 h-5 mr-2" /> GitHub Repo
+                  </Button>
+                </a>
+              ) : null}
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Floating AI */}
+      {project.ai_helpers && (
+        <FloatingAI projectTitle={project.title} projectContext={contextForAI} />
+      )}
+    </>
+  );
+}        </div>
 
         {/* Right Column: Downloads (DIRECT ACCESS) */}
         <div className="space-y-6">
