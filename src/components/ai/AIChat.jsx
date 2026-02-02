@@ -8,12 +8,11 @@ import { toast } from 'react-hot-toast';
 
 export default function AIChat({ projectContext }) {
   const [selectedAI, setSelectedAI] = useState(AI_PERSONAS[0]);
-  const [messages, setMessages] = useState([]); // Array of { role, content }
+  const [messages, setMessages] = useState([]); 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -28,9 +27,9 @@ export default function AIChat({ projectContext }) {
     setIsLoading(true);
 
     try {
-      // Prepare temporary AI message for streaming
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Thinking...' }]);
 
+      // API Call
       const response = await fetch('/api/openrouter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,8 +41,26 @@ export default function AIChat({ projectContext }) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to fetch AI response');
+      // ERROR HANDLING (Detailed)
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("API Route Not Found (404). Check vercel.json or file structure.");
+        }
+        if (response.status === 500) {
+          const errText = await response.text();
+          throw new Error("Server Error (500): " + errText);
+        }
+        throw new Error(`API Error: ${response.status}`);
+      }
+
       if (!response.body) throw new Error('ReadableStream not supported');
+
+      // Remove "Thinking..." and start streaming
+      setMessages(prev => {
+        const newArr = [...prev];
+        newArr[newArr.length - 1] = { role: 'assistant', content: '' };
+        return newArr;
+      });
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -54,7 +71,6 @@ export default function AIChat({ projectContext }) {
         done = doneReading;
         const chunkValue = decoder.decode(value);
         
-        // Append chunk to the last message
         setMessages(prev => {
           const lastMsg = prev[prev.length - 1];
           const newMsg = { ...lastMsg, content: lastMsg.content + chunkValue };
@@ -63,10 +79,13 @@ export default function AIChat({ projectContext }) {
       }
 
     } catch (error) {
-      console.error(error);
-      toast.error('AI unavailable. Check connection.');
-      // Remove empty loading message if failed
+      console.error("AI CHAT ERROR:", error);
+      
+      // Remove loading message
       setMessages(prev => prev.slice(0, -1));
+      
+      // Alert user with specific error
+      alert("AI Error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +94,7 @@ export default function AIChat({ projectContext }) {
   return (
     <div className="flex flex-col h-[600px] glass-panel rounded-2xl overflow-hidden border border-white/10">
       
-      {/* 1. Persona Selector */}
+      {/* Persona Selector */}
       <div className="flex overflow-x-auto p-4 gap-3 bg-black/20 border-b border-white/5 scrollbar-thin">
         {AI_PERSONAS.map((ai) => (
           <button
@@ -94,7 +113,7 @@ export default function AIChat({ projectContext }) {
         ))}
       </div>
 
-      {/* 2. Chat Area */}
+      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 opacity-60">
@@ -110,7 +129,7 @@ export default function AIChat({ projectContext }) {
         <div ref={scrollRef} />
       </div>
 
-      {/* 3. Input Area */}
+      {/* Input Area */}
       <form onSubmit={handleSend} className="p-4 bg-black/20 border-t border-white/5 flex gap-2">
         <input
           type="text"
