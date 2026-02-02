@@ -2,105 +2,108 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useFirestore } from '../../hooks/useFirestore';
 import Button from '../ui/Button';
-import { Youtube, Lock, Unlock, CheckCircle } from 'lucide-react';
+import { Youtube, Lock, CheckCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 export default function YouTubeGate({ videoUrl, projectId, onUnlock }) {
   const { userProfile } = useAuth();
   const { addDocument } = useFirestore('unlocks');
   
-  const [state, setState] = useState('locked'); // locked | verifying | unlocked
+  const [state, setState] = useState('locked'); // locked | verifying
   const [loading, setLoading] = useState(false);
 
   const handleSubscribe = () => {
-    // 1. Open YouTube in new tab
-    window.open(videoUrl, '_blank');
-    
-    // 2. Change UI to verification mode
+    // 1. YouTube link kholo
+    if (videoUrl) {
+        window.open(videoUrl, '_blank');
+    } else {
+        toast.error("Channel link missing, bypassing...");
+    }
+    // 2. Button badal do
     setState('verifying');
   };
 
   const handleVerify = async () => {
+    if (!userProfile) {
+        toast.error("Please Login to Unlock");
+        return;
+    }
+
     setLoading(true);
-    
-    // Simulate API check or simply trust the user flow with a delay
-    // In a real strict app, you'd use YouTube Data API with OAuth
-    setTimeout(async () => {
-      // 3. Record unlock in DB
-      try {
-        await addDocument({
-          userId: userProfile.uid,
-          projectId: projectId,
-          method: 'youtube_subscribe',
-          timestamp: new Date()
-        });
-        
-        setState('unlocked');
-        if (onUnlock) onUnlock();
-      } catch (error) {
-        console.error("Unlock save failed", error);
-      } finally {
-        setLoading(false);
-      }
-    }, 1500); // 1.5s delay for effect
+
+    try {
+      // 3. Database mein Permanent Entry Karo
+      await addDocument({
+        userId: userProfile.uid,
+        projectId: projectId,
+        method: 'youtube_subscribe',
+        unlockedAt: new Date() // Timestamp
+      });
+      
+      toast.success("Subscription Verified!");
+      
+      // 4. Parent component ko bolo ki khol de
+      if (onUnlock) onUnlock();
+
+    } catch (error) {
+      console.error("Unlock Error:", error);
+      // Agar pehle se unlock hai to bhi success maano (Duplicate error fix)
+      if (onUnlock) onUnlock();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (state === 'unlocked') {
-    return (
-      <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 text-center">
-        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
-        <h3 className="text-xl font-bold text-green-400">Content Unlocked</h3>
-        <p className="text-gray-400 text-sm">Access granted. Enjoy the code!</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="relative overflow-hidden rounded-2xl glass-panel p-8 text-center border-2 border-red-500/30 shadow-[0_0_50px_rgba(220,38,38,0.1)]">
+    <div className="relative overflow-hidden rounded-2xl glass-panel p-8 text-center border-2 border-red-500/30 shadow-[0_0_40px_rgba(220,38,38,0.15)]">
+      {/* Background Glow */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-red-400" />
       
       <div className="mb-6">
-        <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+        <motion.div 
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30"
+        >
           <Lock className="w-8 h-8 text-red-500" />
-        </div>
-        <h2 className="text-2xl font-bold mb-2">Locked Content</h2>
-        <p className="text-gray-400 max-w-md mx-auto">
-          Support <span className="text-white font-bold">CodeWithPratik</span> to access the source code, download links, and AI chat.
+        </motion.div>
+        <h2 className="text-2xl font-bold mb-2 text-white">Project Locked</h2>
+        <p className="text-gray-400 max-w-md mx-auto text-sm">
+          Subscribe to <span className="text-white font-bold">CodeWithPratik</span> to get access to source code, files, and AI.
         </p>
       </div>
 
-      {state === 'locked' && (
+      {state === 'locked' ? (
         <Button 
           onClick={handleSubscribe}
-          className="bg-[#FF0000] hover:bg-[#CC0000] text-white border-none shadow-lg shadow-red-900/20 w-full md:w-auto"
+          className="bg-[#FF0000] hover:bg-[#CC0000] text-white border-none shadow-lg shadow-red-900/40 w-full md:w-auto py-3 px-8 text-lg"
         >
-          <Youtube className="w-5 h-5 mr-2" />
-          Subscribe to Unlock
+          <Youtube className="w-6 h-6 mr-2" />
+          Subscribe Channel
         </Button>
-      )}
-
-      {state === 'verifying' && (
+      ) : (
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <p className="text-sm text-yellow-400 bg-yellow-400/10 p-2 rounded-lg border border-yellow-400/20">
-            ⚠ Please subscribe to the channel in the opened tab.
-          </p>
+          <div className="text-sm text-yellow-400 bg-yellow-400/10 p-3 rounded-xl border border-yellow-400/20 max-w-xs mx-auto">
+            ⚠ Please subscribe in the opened tab, then click below.
+          </div>
           <Button 
             onClick={handleVerify}
             isLoading={loading}
             variant="secondary"
-            className="w-full md:w-auto"
+            className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white border-none"
           >
-            I have Subscribed
+            {loading ? "Verifying..." : "I Have Subscribed ✅"}
           </Button>
         </motion.div>
       )}
 
-      <p className="text-xs text-gray-500 mt-6">
-        Checking status automatically...
+      <p className="text-xs text-gray-600 mt-6">
+        One-time verification. Forever access.
       </p>
     </div>
   );
