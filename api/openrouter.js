@@ -1,7 +1,6 @@
-// Koi external import nahi (Taaki crash na ho)
 export default async function handler(req, res) {
   
-  // 1. CORS HEADERS (Manual Setup)
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -10,39 +9,23 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
   );
 
-  // Handle Preflight Request
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Only POST Allowed
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
-    // 2. CHECK API KEY
     const API_KEY = process.env.OPENROUTER_API_KEY;
     const SITE_URL = process.env.SITE_URL || 'https://code-with-pratik.vercel.app';
     const SITE_NAME = process.env.SITE_NAME || 'CodeWithPratik';
 
-    if (!API_KEY) {
-      return res.status(500).json({ error: "Server Config Error: Missing OPENROUTER_API_KEY" });
-    }
+    if (!API_KEY) return res.status(500).json({ error: "Missing API Key" });
 
-    // 3. GET DATA (Manual Validation)
     const { message, ai_name, project_context, history } = req.body || {};
 
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
+    if (!message) return res.status(400).json({ error: "Message is required" });
 
-    // 4. PREPARE PROMPT
     const aiRole = ai_name || 'Nova';
-    const systemPrompt = `You are ${aiRole}, a coding assistant. 
-    CONTEXT: ${project_context ? project_context.slice(0, 3000) : 'No context provided.'}`;
+    const systemPrompt = `You are ${aiRole}. CONTEXT: ${project_context ? project_context.slice(0, 3000) : 'No context.'}`;
 
-    // History limit (Last 6 messages)
     const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
     
     const messages = [
@@ -51,7 +34,7 @@ export default async function handler(req, res) {
       { role: 'user', content: message }
     ];
 
-    // 5. CALL OPENROUTER (Using STABLE FREE MODEL)
+    // 2. CALL OPENROUTER (Changed Model to Llama 3 - More Stable)
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -61,8 +44,8 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // Yeh model 100% Free aur Stable hai
-        model: 'google/gemini-2.0-flash-exp:free', 
+        // YAHAN CHANGE KIYA HAI 👇
+        model: 'meta-llama/llama-3.2-3b-instruct:free', 
         messages: messages,
         stream: true, 
       })
@@ -70,20 +53,19 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      // Agar error aaye to console mein dikhao
       console.error("OpenRouter Error:", errorText);
-      return res.status(response.status).json({ error: `AI Provider Error: ${errorText}` });
+      return res.status(500).json({ error: `AI Provider Error: ${errorText}` });
     }
 
-    // 6. STREAM RESPONSE
+    // 3. STREAM RESPONSE
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
     });
 
-    if (!response.body) {
-       throw new Error("No response body from AI provider");
-    }
+    if (!response.body) throw new Error("No response body");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -98,10 +80,7 @@ export default async function handler(req, res) {
     res.end();
 
   } catch (error) {
-    console.error("Server Crash Error:", error);
-    return res.status(500).json({ 
-      error: "Internal Server Error", 
-      details: error.message 
-    });
+    console.error("Server Crash:", error);
+    return res.status(500).json({ error: "Internal Server Error", details: error.message });
   }
 }
