@@ -9,8 +9,7 @@ export default function YouTubeGate({ videoUrl, projectId, onUnlock }) {
   const { userProfile } = useAuth();
   const { addDocument } = useFirestore('unlocks');
   
-  // States: 'idle' | 'timer' | 'ready' | 'verifying'
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState('idle'); // idle | timer | ready | verifying
   const [timeLeft, setTimeLeft] = useState(5);
 
   // Timer Logic
@@ -21,51 +20,58 @@ export default function YouTubeGate({ videoUrl, projectId, onUnlock }) {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
     } else if (timeLeft === 0 && status === 'timer') {
-      setStatus('ready'); // Timer khatam, ab verify button dikhao
+      setStatus('ready'); 
     }
     return () => clearInterval(interval);
   }, [status, timeLeft]);
 
   const handleSubscribeClick = () => {
     if (!videoUrl) {
-        toast.error("Channel link missing");
+        // Agar link nahi hai to direct verify pe bhej do
         setStatus('ready');
         return;
     }
-    // 1. YouTube kholo
     window.open(videoUrl, '_blank');
-    
-    // 2. Timer shuru karo
     setStatus('timer');
     setTimeLeft(5); 
   };
 
   const handleVerifyClick = async () => {
+    // 1. Check Login
     if (!userProfile) {
-        toast.error("Please Login first!");
+        toast.error("Please Login to Unlock");
+        // Login page par redirect kar sakte hain, par abhi alert dete hain
         return;
     }
 
     setStatus('verifying');
 
     try {
-      // 3. Database mein Permanent Entry
+      // 2. Try Saving to Database
+      console.log("Saving unlock for:", userProfile.uid);
+      
       await addDocument({
         userId: userProfile.uid,
-        projectId: projectId, // Project ID link kar rahe hain
+        projectId: projectId,
         method: 'youtube_gate',
-        unlockedAt: new Date()
+        unlockedAt: new Date().toISOString() // String format is safer
       });
 
-      toast.success("Project Unlocked Successfully!");
+      toast.success("Unlocked Permanently!");
       
-      // 4. Parent ko batao ki unlock ho gaya
+      // 3. Success -> Open Gate
       if (onUnlock) onUnlock();
 
     } catch (error) {
-      console.error("Unlock DB Error:", error);
-      // Agar error aaye (network issue), tab bhi user ke liye khol do
+      console.error("DB Save Failed:", error);
+      
+      // --- FIX IS HERE ---
+      // Agar Database error de, tab bhi user ke liye khol do (Temporary Unlock)
+      // Taaki user "Loop" mein na phase
+      toast.success("Unlocked (Session Only)");
       if (onUnlock) onUnlock();
+    } finally {
+      setStatus('ready'); // Reset status just in case
     }
   };
 
@@ -76,37 +82,37 @@ export default function YouTubeGate({ videoUrl, projectId, onUnlock }) {
         <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
           <Lock className="w-8 h-8 text-red-500" />
         </div>
-        <h2 className="text-2xl font-bold mb-2 text-white">Source Code Locked</h2>
+        <h2 className="text-2xl font-bold mb-2 text-white">Locked Content</h2>
         <p className="text-gray-400 text-sm">
-          Complete the task to unlock files & AI Assistant forever.
+          Subscribe to access source code & AI.
         </p>
       </div>
 
       <div className="space-y-4">
         
-        {/* STEP 1: SUBSCRIBE BUTTON */}
+        {/* BUTTON 1: SUBSCRIBE */}
         {status === 'idle' && (
           <Button 
             onClick={handleSubscribeClick}
-            className="w-full bg-[#FF0000] hover:bg-[#cc0000] text-white border-none py-4 text-lg shadow-lg shadow-red-900/40"
+            className="w-full bg-[#FF0000] hover:bg-[#cc0000] text-white border-none py-4 shadow-lg shadow-red-900/40"
           >
             <Youtube className="w-6 h-6 mr-2" />
             Subscribe Channel
           </Button>
         )}
 
-        {/* STEP 2: TIMER */}
+        {/* BUTTON 2: TIMER */}
         {status === 'timer' && (
-          <Button disabled className="w-full bg-gray-700 text-gray-300 border-none cursor-wait">
+          <Button disabled className="w-full bg-gray-700 text-gray-300 border-none cursor-wait py-4">
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Checking... {timeLeft}s
           </Button>
         )}
 
-        {/* STEP 3: VERIFY BUTTON */}
+        {/* BUTTON 3: VERIFY (Clickable) */}
         {(status === 'ready' || status === 'verifying') && (
           <div className="space-y-2 animate-in fade-in zoom-in">
-             <div className="text-xs text-green-400 bg-green-400/10 p-2 rounded">
+             <div className="text-xs text-green-400 bg-green-400/10 p-2 rounded border border-green-500/20">
                 ✅ Task Detected
              </div>
              <Button 
@@ -121,20 +127,6 @@ export default function YouTubeGate({ videoUrl, projectId, onUnlock }) {
         )}
 
       </div>
-      
-      <p className="text-xs text-gray-500 mt-6">
-        Unlock once, access anytime.
-      </p>
-    </div>
-  );
-}            {loading ? "Verifying..." : "I Have Subscribed ✅"}
-          </Button>
-        </motion.div>
-      )}
-
-      <p className="text-xs text-gray-600 mt-6">
-        One-time verification. Forever access.
-      </p>
     </div>
   );
 }
