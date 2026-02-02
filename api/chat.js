@@ -1,9 +1,9 @@
 export const config = {
-  runtime: 'edge', // Fast & No Timeout
+  runtime: 'edge',
 };
 
 export default async function handler(req) {
-  // CORS
+  // 1. CORS Headers
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -22,14 +22,15 @@ export default async function handler(req) {
     const API_TOKEN = process.env.HUGGING_FACE_TOKEN;
 
     if (!API_TOKEN) {
-      return new Response(JSON.stringify({ error: "Missing HUGGING_FACE_TOKEN" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Server Config Error: Missing HUGGING_FACE_TOKEN" }), { status: 500 });
     }
 
-    // Mistral-7B (Best Free Model on Hugging Face)
-    const MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3";
+    // --- FIX: UPDATED URL (router.huggingface.co) ---
+    // Using Mistral-7B-Instruct-v0.2 which is very stable on free tier
+    const MODEL_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2";
 
-    const prompt = `<s>[INST] You are a helpful AI Coding Assistant.
-    CONTEXT: ${context || 'No context.'}
+    const prompt = `<s>[INST] You are an expert Coding Assistant.
+    CONTEXT: ${context ? context.slice(0, 2000) : 'No context.'}
     
     USER: ${message} [/INST]`;
 
@@ -42,7 +43,7 @@ export default async function handler(req) {
       body: JSON.stringify({
         inputs: prompt,
         parameters: {
-          max_new_tokens: 1000,
+          max_new_tokens: 500, // Thoda kam kiya taaki timeout na ho
           return_full_text: false,
           temperature: 0.7
         }
@@ -54,15 +55,23 @@ export default async function handler(req) {
       return new Response(JSON.stringify({ error: "HF API Error", details: err }), { status: 500 });
     }
 
-    // Hugging Face JSON return karta hai (Stream nahi hota free tier mein usually)
     const result = await response.json();
-    const reply = result[0]?.generated_text || "No response generated.";
+    
+    // Hugging Face kabhi Array deta hai kabhi Object, dono handle karein
+    let reply = "";
+    if (Array.isArray(result)) {
+      reply = result[0]?.generated_text;
+    } else {
+      reply = result?.generated_text;
+    }
+
+    if (!reply) reply = "I couldn't generate a response. Please try again.";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal Error", details: error.message }), { status: 500 });
   }
 }
