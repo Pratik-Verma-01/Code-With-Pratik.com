@@ -1,47 +1,57 @@
-import { allowCors } from './_utils.js';
-import { z } from 'zod';
+// Koi external import nahi (Taaki crash na ho)
+export default async function handler(req, res) {
+  
+  // 1. CORS HEADERS (Manual Setup)
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
 
-const aiChatSchema = z.object({
-  message: z.string().min(1, "Message cannot be empty").max(4000),
-  ai_name: z.string(),
-  project_context: z.string().optional(),
-  history: z.array(z.any()).optional().default([]),
-});
+  // Handle Preflight Request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-const PERSONAS = {
-  Nova: "You are Nova, an enthusiastic coding assistant.",
-  Astra: "You are Astra, a debugging expert.",
-  Zen: "You are Zen, an optimization expert.",
-  Echo: "You are Echo, a refactoring assistant.",
-  Lumen: "You are Lumen, a documentation wizard.",
-  Atlas: "You are Atlas, a software architect."
-};
-
-async function handler(req, res) {
+  // Only POST Allowed
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
+    // 2. CHECK API KEY
     const API_KEY = process.env.OPENROUTER_API_KEY;
     const SITE_URL = process.env.SITE_URL || 'https://code-with-pratik.vercel.app';
     const SITE_NAME = process.env.SITE_NAME || 'CodeWithPratik';
 
-    if (!API_KEY) return res.status(500).json({ error: "Server Config Error: Missing API Key" });
+    if (!API_KEY) {
+      return res.status(500).json({ error: "Server Config Error: Missing OPENROUTER_API_KEY" });
+    }
 
-    const body = aiChatSchema.parse(req.body);
-    const { message, ai_name, project_context, history } = body;
-    const personaPrompt = PERSONAS[ai_name] || PERSONAS['Nova'];
-    
-    const systemMessage = {
-      role: 'system',
-      content: `${personaPrompt} 
-      CONTEXT: ${project_context ? project_context.slice(0, 3000) : 'No context.'}`
-    };
+    // 3. GET DATA (Manual Validation)
+    const { message, ai_name, project_context, history } = req.body || {};
 
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // 4. PREPARE PROMPT
+    const aiRole = ai_name || 'Nova';
+    const systemPrompt = `You are ${aiRole}, a coding assistant. 
+    CONTEXT: ${project_context ? project_context.slice(0, 3000) : 'No context provided.'}`;
+
+    // History limit (Last 6 messages)
     const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
-    const messages = [systemMessage, ...recentHistory, { role: 'user', content: message }];
+    
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...recentHistory,
+      { role: 'user', content: message }
+    ];
 
+    // 5. CALL OPENROUTER (Using STABLE FREE MODEL)
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -51,27 +61,29 @@ async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // YAHAN CHANGE KIYA HAI (FREE MODEL)
-        model: 'google/gemini-2.0-flash-lite-preview-02-05:free',
+        // Yeh model 100% Free aur Stable hai
+        model: 'google/gemini-2.0-flash-exp:free', 
         messages: messages,
-        stream: true,
-        temperature: 0.7,
-        // Max tokens thoda kam kiya taaki free tier mein fit ho
-        max_tokens: 2000 
+        stream: true, 
       })
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('OpenRouter Error:', errText);
-      throw new Error(`OpenRouter Error (${response.status}): ${errText}`);
+      const errorText = await response.text();
+      console.error("OpenRouter Error:", errorText);
+      return res.status(response.status).json({ error: `AI Provider Error: ${errorText}` });
     }
 
+    // 6. STREAM RESPONSE
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
     });
+
+    if (!response.body) {
+       throw new Error("No response body from AI provider");
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -82,41 +94,14 @@ async function handler(req, res) {
       const chunk = decoder.decode(value);
       res.write(chunk);
     }
-    res.end();
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ 
-      error: 'Internal Server Error', 
-      message: error.message 
-    });
-  }
-}
-
-export default allowCors(handler);    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      
-      const chunk = decoder.decode(value);
-      res.write(chunk);
-    }
-
-    res.end();
-
-  } catch (error) {
-    console.error('[SERVER ERROR]:', error);
     
-    // Zod Validation Error
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ error: 'Invalid Input', details: error.errors });
-    }
+    res.end();
 
-    // Generic Error with Message
+  } catch (error) {
+    console.error("Server Crash Error:", error);
     return res.status(500).json({ 
-      error: 'Internal Server Error', 
-      message: error.message || "Unknown server error" 
+      error: "Internal Server Error", 
+      details: error.message 
     });
   }
 }
-
-export default allowCors(handler);
