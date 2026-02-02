@@ -10,7 +10,7 @@ import { Download, Github, Calendar, Eye, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 
-// --- SKELETON LOADER ---
+// Skeleton Component
 function ProjectSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse p-4">
@@ -27,25 +27,22 @@ export default function ProjectDetails() {
   const { slug } = useParams();
   const { userProfile } = useAuth();
   
-  // Database Hooks
   const { getDocuments: getProjects } = useFirestore('projects');
   const { getDocuments: getUnlocks } = useFirestore('unlocks');
   
-  // Local State
   const [project, setProject] = useState(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- DATA FETCHING ---
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function checkAccess() {
       try {
         setLoading(true);
         
-        // 1. Fetch Project by Slug
+        // 1. PROJECT LOAD KARO
         const projectDocs = await getProjects({ field: 'slug', op: '==', val: slug });
         
         if (!isMounted) return;
@@ -54,51 +51,129 @@ export default function ProjectDetails() {
           const p = projectDocs[0];
           setProject(p);
 
-          // 2. CHECK UNLOCK STATUS
+          // 2. AGAR USER LOGGED IN HAI, TO DATABASE CHECK KARO
           if (userProfile) {
-            // Case A: Owner is always unlocked
+            // Agar main owner hoon, to waise hi unlocked
             if (p.created_by_user_id === userProfile.uid) {
               setIsUnlocked(true);
             } else {
-              // Case B: Check Database for existing unlock
-              // Fetch ONLY unlocks for this user to save bandwidth
+              // DATABASE CHECK:
+              // "Mujhe woh saare unlocks do jo is USER ke hain"
               const myUnlocks = await getUnlocks({ field: 'userId', op: '==', val: userProfile.uid });
               
-              // Check if THIS project ID exists in myUnlocks
-              const hasUnlocked = myUnlocks.some(u => u.projectId === p.id);
+              // "Kya unme se koi is PROJECT ka hai?"
+              const found = myUnlocks.some(u => u.projectId === p.id);
               
-              if (hasUnlocked) {
-                setIsUnlocked(true);
+              if (found) {
+                setIsUnlocked(true); // Permanent Unlock Found!
               }
             }
           }
         } else {
-          setError("Project not found.");
+          setError("Project Not Found");
         }
 
       } catch (err) {
-        if (isMounted) setError(err.message);
+        console.error(err);
+        setError(err.message);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadData();
+    checkAccess();
 
     return () => { isMounted = false; };
-  }, [slug, userProfile?.uid]); // Re-run when user logs in/out
-
-  // --- RENDER STATES ---
+  }, [slug, userProfile?.uid]); // User ID change hote hi dobara check karega
 
   if (loading) return <div className="max-w-7xl mx-auto"><ProjectSkeleton /></div>;
 
   if (error || !project) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
-        <div className="bg-red-500/10 border border-red-500/30 p-8 rounded-2xl max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Project Not Found</h2>
-          <p className="text-gray-400 mb-6">{error || "This project may have been deleted."}</p>
+         <h2 className="text-2xl font-bold text-red-500">Project Not Found</h2>
+         <Link to="/"><Button variant="outline" className="mt-4">Home</Button></Link>
+      </div>
+    );
+  }
+
+  const contextForAI = `Project: ${project.title}. Lang: ${project.primary_language}. Desc: ${project.short_description}. Code: ${project.long_description}`;
+
+  return (
+    <>
+      <SEO title={`${project.title} | CodeWithPratik`} description={project.short_description} image={project.thumbnail_url} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 fade-in pb-24">
+        
+        {/* Left: Info */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="glass-panel rounded-2xl p-6 relative">
+             <h1 className="text-3xl font-bold mb-4">{project.title}</h1>
+             <div className="flex gap-4 text-sm text-gray-400">
+                <span className="bg-white/10 px-2 py-1 rounded">{project.primary_language}</span>
+                <span>{formatDate(project.createdAt)}</span>
+             </div>
+             <p className="mt-4 text-gray-300">{project.short_description}</p>
+          </div>
+
+          <div className="aspect-video bg-black/50 rounded-2xl overflow-hidden border border-white/10">
+            <img src={project.thumbnail_url} className="w-full h-full object-cover" loading="lazy" />
+          </div>
+
+          <div className="glass-panel rounded-2xl p-6 prose prose-invert max-w-none">
+            <ReactMarkdown>{project.long_description}</ReactMarkdown>
+          </div>
+        </div>
+
+        {/* Right: Gate or Download */}
+        <div className="space-y-6">
+          <div className="glass-panel rounded-2xl p-6 sticky top-24 border border-white/10">
+            
+            {!isUnlocked ? (
+              // LOCKED STATE: YouTube Gate Component
+              <YouTubeGate 
+                videoUrl={project.view_task} 
+                projectId={project.id} // Important for DB
+                onUnlock={() => setIsUnlocked(true)} 
+              />
+            ) : (
+              // UNLOCKED STATE: Downloads
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-xl flex items-center gap-3">
+                  <Eye className="w-5 h-5 text-green-500" />
+                  <div>
+                    <h3 className="font-bold text-green-400">Unlocked</h3>
+                    <p className="text-xs text-gray-400">Access granted forever.</p>
+                  </div>
+                </div>
+
+                {project.code_archive_url && (
+                  <a href={project.code_archive_url} target="_blank" className="block">
+                    <Button className="w-full bg-white text-black hover:bg-gray-200">
+                      <Download className="w-5 h-5" /> Download Source
+                    </Button>
+                  </a>
+                )}
+                
+                {project.repo_url && (
+                  <a href={project.repo_url} target="_blank" className="block">
+                    <Button variant="outline" className="w-full">
+                      <Github className="w-5 h-5" /> GitHub Repo
+                    </Button>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isUnlocked && project.ai_helpers && (
+        <FloatingAI projectTitle={project.title} projectContext={contextForAI} />
+      )}
+    </>
+  );
+        }          <p className="text-gray-400 mb-6">{error || "This project may have been deleted."}</p>
           <Link to="/"><Button variant="outline">Back to Home</Button></Link>
         </div>
       </div>
