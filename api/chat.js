@@ -3,7 +3,7 @@ export const config = {
 };
 
 export default async function handler(req) {
-  // 1. CORS Headers
+  // CORS Headers
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -22,15 +22,15 @@ export default async function handler(req) {
     const API_TOKEN = process.env.HUGGING_FACE_TOKEN;
 
     if (!API_TOKEN) {
-      return new Response(JSON.stringify({ error: "Server Config Error: Missing HUGGING_FACE_TOKEN" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Missing HUGGING_FACE_TOKEN in Vercel" }), { status: 500 });
     }
 
-    // --- FIX: UPDATED URL (router.huggingface.co) ---
-    // Using Mistral-7B-Instruct-v0.2 which is very stable on free tier
-    const MODEL_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2";
+    // --- STANDARD URL (Mistral 7B) ---
+    // Yeh URL sabse zyada reliable hai free tier ke liye
+    const MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2";
 
-    const prompt = `<s>[INST] You are an expert Coding Assistant.
-    CONTEXT: ${context ? context.slice(0, 2000) : 'No context.'}
+    const prompt = `<s>[INST] You are a helpful AI Coding Assistant.
+    CONTEXT: ${context ? context.slice(0, 1500) : 'No context.'}
     
     USER: ${message} [/INST]`;
 
@@ -43,7 +43,7 @@ export default async function handler(req) {
       body: JSON.stringify({
         inputs: prompt,
         parameters: {
-          max_new_tokens: 500, // Thoda kam kiya taaki timeout na ho
+          max_new_tokens: 500,
           return_full_text: false,
           temperature: 0.7
         }
@@ -51,21 +51,21 @@ export default async function handler(req) {
     });
 
     if (!response.ok) {
+      // Agar Model Loading mein hai to 503 aata hai
+      if (response.status === 503) {
+        return new Response(JSON.stringify({ reply: "Model is waking up... Ask me again in 10 seconds!" }), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+      
       const err = await response.text();
-      return new Response(JSON.stringify({ error: "HF API Error", details: err }), { status: 500 });
+      return new Response(JSON.stringify({ error: `HF Error (${response.status})`, details: err }), { status: 500 });
     }
 
     const result = await response.json();
     
-    // Hugging Face kabhi Array deta hai kabhi Object, dono handle karein
-    let reply = "";
-    if (Array.isArray(result)) {
-      reply = result[0]?.generated_text;
-    } else {
-      reply = result?.generated_text;
-    }
-
-    if (!reply) reply = "I couldn't generate a response. Please try again.";
+    let reply = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
+    if (!reply) reply = "No response. Try again.";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
