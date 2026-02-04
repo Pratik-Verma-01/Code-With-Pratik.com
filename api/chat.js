@@ -1,9 +1,9 @@
 export const config = {
-  runtime: 'edge',
+  runtime: 'edge', // Fast & No Timeout
 };
 
 export default async function handler(req) {
-  // CORS Headers
+  // 1. CORS Headers (Security)
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -19,59 +19,56 @@ export default async function handler(req) {
 
   try {
     const { message, context } = await req.json();
-    const API_TOKEN = process.env.HUGGING_FACE_TOKEN;
-
-    if (!API_TOKEN) {
-      return new Response(JSON.stringify({ error: "Missing HUGGING_FACE_TOKEN in Vercel" }), { status: 500 });
+    
+    // Check API Key
+    const API_KEY = process.env.OPENROUTER_API_KEY;
+    if (!API_KEY) {
+      return new Response(JSON.stringify({ 
+        reply: "⚠️ System Error: API Key missing in Vercel settings." 
+      }), { status: 200 }); // Status 200 bheja taaki frontend crash na ho
     }
 
-    // --- STANDARD URL (Mistral 7B) ---
-    // Yeh URL sabse zyada reliable hai free tier ke liye
-    const MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2";
+    // 2. Prepare Prompt
+    const systemPrompt = `You are a helpful AI Assistant.
+    CONTEXT: ${context ? context.slice(0, 2000) : 'No context.'}`;
 
-    const prompt = `<s>[INST] You are a helpful AI Coding Assistant.
-    CONTEXT: ${context ? context.slice(0, 1500) : 'No context.'}
-    
-    USER: ${message} [/INST]`;
-
-    const response = await fetch(MODEL_URL, {
-      method: "POST",
+    // 3. Call OpenRouter (Google Gemini Free - Super Stable)
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
       headers: {
-        "Authorization": `Bearer ${API_TOKEN}`,
-        "Content-Type": "application/json",
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://code-with-pratik.vercel.app',
+        'X-Title': 'CodeWithPratik',
       },
       body: JSON.stringify({
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: 500,
-          return_full_text: false,
-          temperature: 0.7
-        }
+        model: 'google/gemini-2.0-flash-lite-preview-02-05:free', // FREE & STABLE
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        stream: false // Simple JSON response (No stream issues)
       }),
     });
 
     if (!response.ok) {
-      // Agar Model Loading mein hai to 503 aata hai
-      if (response.status === 503) {
-        return new Response(JSON.stringify({ reply: "Model is waking up... Ask me again in 10 seconds!" }), {
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-        });
-      }
-      
-      const err = await response.text();
-      return new Response(JSON.stringify({ error: `HF Error (${response.status})`, details: err }), { status: 500 });
+      const errText = await response.text();
+      return new Response(JSON.stringify({ 
+        reply: `⚠️ AI Provider Error: ${response.status}. Please try again.` 
+      }), { status: 200 });
     }
 
-    const result = await response.json();
-    
-    let reply = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
-    if (!reply) reply = "No response. Try again.";
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || "No response from AI.";
 
+    // 4. Send Reply
     return new Response(JSON.stringify({ reply }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Internal Error", details: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ 
+      reply: `⚠️ Internal Error: ${error.message}` 
+    }), { status: 200 });
   }
 }
