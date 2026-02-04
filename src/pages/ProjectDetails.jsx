@@ -8,7 +8,6 @@ import { Download, Github, Calendar, Code2, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 
-// Skeleton Loader
 function ProjectSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse p-4">
@@ -24,7 +23,6 @@ function ProjectSkeleton() {
 export default function ProjectDetails() {
   const { slug } = useParams();
   
-  // Database Hook
   const { getDocuments: getProjects } = useFirestore('projects');
   
   const [project, setProject] = useState(null);
@@ -47,7 +45,7 @@ export default function ProjectDetails() {
           setError("Project Not Found");
         }
       } catch (err) {
-        setError(err.message);
+        if (isMounted) setError(err.message);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -96,7 +94,7 @@ export default function ProjectDetails() {
           </div>
 
           <div className="aspect-video bg-black/50 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-            <img src={project.thumbnail_url} className="w-full h-full object-cover" loading="lazy" alt="Thumbnail" />
+            <img src={project.thumbnail_url} className="w-full h-full object-cover" loading="lazy" alt="thumbnail" />
           </div>
 
           <div className="glass-panel rounded-2xl p-6 prose prose-invert max-w-none">
@@ -104,7 +102,7 @@ export default function ProjectDetails() {
           </div>
         </div>
 
-        {/* Right Column: Downloads (DIRECT ACCESS) */}
+        {/* Right Column: Downloads */}
         <div className="space-y-6">
           <div className="glass-panel rounded-2xl p-6 sticky top-24 border border-primary/20 shadow-[0_0_30px_rgba(0,243,255,0.05)]">
             
@@ -143,7 +141,7 @@ export default function ProjectDetails() {
         </div>
       </div>
 
-      {/* AI Assistant */}
+      {/* Floating AI */}
       {project.ai_helpers && (
         <FloatingAI projectTitle={project.title} projectContext={contextForAI} />
       )}
