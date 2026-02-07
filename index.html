@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    
+    <!-- Primary Meta Tags -->
+    <title>〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄 | Futuristic Code Sharing Platform</title>
+    <meta name="title" content="〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄 | Futuristic Code Sharing Platform" />
+    <meta name="description" content="A futuristic web platform for sharing coding projects with AI-powered assistance. Upload, share, and explore code with the help of Nova AI." />
+    <meta name="keywords" content="code sharing, programming, developer tools, AI assistant, open source, projects, coding platform" />
+    <meta name="author" content="Pratik" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="English" />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://code-with-pratik.vercel.app/" />
+    <meta property="og:title" content="〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄 | Futuristic Code Sharing Platform" />
+    <meta property="og:description" content="A futuristic web platform for sharing coding projects with AI-powered assistance. Upload, share, and explore code with the help of Nova AI." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="CODE-With-PRATIK" />
+    <meta property="og:locale" content="en_US" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://code-with-pratik.vercel.app/" />
+    <meta name="twitter:title" content="〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄 | Futuristic Code Sharing Platform" />
+    <meta name="twitter:description" content="A futuristic web platform for sharing coding projects with AI-powered assistance." />
+    <meta name="twitter:image" content="/og-image.png" />
+    
+    <!-- PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CODE-With-PRATIK" />
+    
+    <!-- Preconnect to external origins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    
+    <!-- Prevent FOUC -->
+    <script>
+      (function() {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else if (theme === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+    
+    <!-- Critical CSS for initial load -->
+    <style>
+      /* Prevent layout shift during load */
+      html {
+        scroll-behavior: smooth;
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #0f172a;
+        color: #f1f5f9;
+      }
+      
+      html.dark body {
+        background-color: #0f172a;
+        color: #f1f5f9;
+      }
+      
+      html:not(.dark) body {
+        background-color: #f8fafc;
+        color: #0f172a;
+      }
+      
+      /* Initial loader */
+      #app-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        z-index: 9999;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+      
+      #app-loader.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+      
+      #app-loader .loader-logo {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #00D4FF 0%, #A855F7 50%, #EC4899 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 2rem;
+        text-align: center;
+      }
+      
+      #app-loader .loader-spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(0, 212, 255, 0.1);
+        border-top-color: #00D4FF;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      /* Hide root until app loads */
+      #root:empty {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Initial loader shown until React hydrates -->
+    <div id="app-loader">
+      <div class="loader-logo">〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄</div>
+      <div class="loader-spinner"></div>
+    </div>
+    
+    <!-- React root -->
+    <div id="root"></div>
+    
+    <!-- Hide loader when app loads -->
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const loader = document.getElementById('app-loader');
+          if (loader) {
+            loader.classList.add('hidden');
+            setTimeout(function() {
+              loader.remove();
+            }, 500);
+          }
+        }, 100);
+      });
+    </script>
+    
+    <!-- NoScript fallback -->
+    <noscript>
+      <style>
+        #app-loader { display: none !important; }
+      </style>
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; padding: 20px; background: #0f172a; color: #f1f5f9;">
+        <div>
+          <h1 style="font-family: 'Orbitron', sans-serif; background: linear-gradient(135deg, #00D4FF, #A855F7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
+            〄𝙲𝙾𝙳𝙴-Ꮿɪᴛʜ-ᎮᏒᎪTᎥᏦ〄
+          </h1>
+          <p>JavaScript is required to run this application.</p>
+          <p>Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+      </div>
+    </noscript>
+  </body>
+</html>
