@@ -1,0 +1,10 @@
+export { default as DashboardHome } from './DashboardHome';
+export { default as UploadProject } from './UploadProject';
+export { default as MyProjects } from './MyProjects';
+export { default as EditProject } from './EditProject';
+export { default as ExploreAI } from './ExploreAI';
+export { default as Profile } from './Profile';
+export { default as EditProfile } from './EditProfile';
+export { default as Rewards } from './Rewards';
+export { default as Notifications } from './Notifications';
+export { default as Settings } from './Settings';
